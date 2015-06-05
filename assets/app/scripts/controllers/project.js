@@ -20,6 +20,13 @@ angular.module('openshiftConsole')
       showSidebarRight: false
     };
 
+    /* The view mode of the overview project page */
+    var modes = [ 'tiles', 'topology' ];
+    $scope.overviewMode = modes[0];
+    $scope.overviewToggle = function overviewToggle() {
+      $scope.overviewMode = modes[(modes.indexOf($scope.overviewMode) + 1) % modes.length];
+    };
+
     AuthService.withUser().then(function() {
       DataService.get("projects", $scope.projectName, $scope, {errorNotification: false}).then(
         // success

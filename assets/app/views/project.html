@@ -32,7 +32,7 @@
 
       </div>
 
-      <div>
+      <div ng-if="overviewMode == 'tiles'">
 
         <!-- TODO handle multiple services mapping to the same deploymentConfig/deployment/pod -->
         <section ng-repeat="(serviceId, service) in services" class="components components-group">
@@ -211,6 +211,8 @@
         </section>
       </div>
 
+      <div ng-if="overviewMode == 'topology' && !renderOptions.showGetStarted">
+      </div>
 
     </div>
   </project-page>
