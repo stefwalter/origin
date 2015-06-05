@@ -17,9 +17,11 @@ angular.module('openshiftConsole')
                         deploymentCausesFilter,
                         LabelFilter,
                         Logger,
-                        ImageStreamResolver) {
+                        ImageStreamResolver,
+                        ObjectDescriber) {
     $scope.pods = {};
     $scope.services = {};
+    $scope.routes = {};
     $scope.routesByService = {};
     // The "best" route to display on the overview page for each service
     // (one with a custom host if present)
@@ -58,6 +60,26 @@ angular.module('openshiftConsole')
     $scope.renderOptions = $scope.renderOptions || {};
     $scope.renderOptions.showSidebarRight = false;
 
+    /*
+     * HACK: The use of <base href="/"> that is encouraged by angular is
+     * a cop-out. It breaks a number of real world use cases, including
+     * local xlink:href. Use location.href to get around it, even though
+     * these SVG <defs> are local in the template.
+     */
+    $scope.topologyKinds = {
+      DeploymentConfig: location.href + "#vertex-DeploymentConfig",
+      Pod: location.href + "#vertex-Pod",
+      ReplicationController: location.href + "#vertex-ReplicationController",
+      Route: location.href + "#vertex-Route",
+      Service: location.href + "#vertex-Service"
+    };
+
+    $scope.topologySelection = null;
+
+    /* Filled in by updateTopology */
+    $scope.topologyItems = { };
+    $scope.topologyRelations = [ ];
+
     var watches = [];
 
     watches.push(DataService.watch("pods", $scope, function(pods) {
@@ -66,6 +88,7 @@ angular.module('openshiftConsole')
       // Must be called after podRelationships()
       updateShowGetStarted();
       ImageStreamResolver.fetchReferencedImageStreamImages($scope.pods, $scope.imagesByDockerReference, $scope.imageStreamImageRefByDockerReference, $scope);
+      updateTopologyLater();
       Logger.log("pods", $scope.pods);
     }));
 
@@ -86,13 +109,15 @@ angular.module('openshiftConsole')
 
       $scope.emptyMessage = "No services to show";
       updateFilterWarning();
+      updateTopologyLater();
       Logger.log("services (list)", $scope.services);
     }));
 
     watches.push(DataService.watch("routes", $scope, function(routes) {
+      $scope.routes = routes.by("metadata.name");
       var routeMap = $scope.routesByService = {};
       var displayRouteMap = $scope.displayRouteByService = {};
-      angular.forEach(routes.by("metadata.name"), function(route, routeName){
+      angular.forEach($scope.routes, function(route, routeName){
         if (route.spec.to.kind !== "Service") {
           return;
         }
@@ -108,6 +133,7 @@ angular.module('openshiftConsole')
         }
       });
 
+      updateTopologyLater();
       Logger.log("routes (subscribe)", $scope.routesByService);
     }));
 
@@ -165,6 +191,8 @@ angular.module('openshiftConsole')
       Logger.log("podsByDeployment", $scope.podsByDeployment);
       Logger.log("podsByService", $scope.podsByService);
       Logger.log("monopodsByService", $scope.monopodsByService);
+
+      updateTopologyLater();
     };
 
     // Filter out monopods we know we don't want to see
@@ -265,6 +293,7 @@ angular.module('openshiftConsole')
 
       // Must be called after podRelationships()
       updateShowGetStarted();
+      updateTopologyLater();
 
       Logger.log("deployments (subscribe)", $scope.deployments);
     }));
@@ -274,6 +303,7 @@ angular.module('openshiftConsole')
       $scope.imageStreams = imageStreams.by("metadata.name");
       ImageStreamResolver.buildDockerRefMapForImageStreams($scope.imageStreams, $scope.imageStreamImageRefByDockerReference);
       ImageStreamResolver.fetchReferencedImageStreamImages($scope.pods, $scope.imagesByDockerReference, $scope.imageStreamImageRefByDockerReference, $scope);
+      updateTopologyLater();
       Logger.log("imagestreams (subscribe)", $scope.imageStreams);
     }));
 
@@ -324,6 +354,7 @@ angular.module('openshiftConsole')
       deploymentConfigsByService();
       // Must be called after deploymentConfigsByService()
       updateShowGetStarted();
+      updateTopologyLater();
 
       Logger.log("deploymentconfigs (subscribe)", $scope.deploymentConfigs);
     }));
@@ -346,6 +377,7 @@ angular.module('openshiftConsole')
       else if (action === 'DELETED'){
         // TODO
       }
+      updateTopologyLater();
       Logger.log("builds (subscribe)", $scope.builds);
     }));
 
@@ -384,7 +416,99 @@ angular.module('openshiftConsole')
       });
     });
 
+    var updateTimeout = null;
+
+    function updateTopology() {
+      updateTimeout = null;
+
+      var topologyRelations = [];
+      var topologyItems = { };
+
+      // We only add pods that are pointed to by a service
+      // Note that we use metadata.selfLink as a unique identifier since
+      // metadata.uid isn't present on everything
+      angular.forEach($scope.pods, function(pod, name) {
+        if (showMonopod(pod))
+          topologyItems[pod.metadata.selfLink] = pod;
+      });
+
+      // Put each of the resources into the topology. Each of these
+      // are name -> object mappings.
+      [ $scope.routes,
+        $scope.services,
+        $scope.deployments,
+        $scope.deploymentConfigs
+      ].forEach(function(resources) {
+        angular.forEach(resources, function(resource, name) {
+          topologyItems[resource.metadata.selfLink] = resource;
+        });
+      });
+
+      /*
+       * Most of the tables in this scope are in a standard form with
+       * string keys, pointing to a map of further name -> object mappings.
+       *
+       * We can process them all together.
+       *
+       * Only relationships for objects added above will be displayed by
+       * the topology. So we can (for example) leave relations for monopods in.
+       */
+      [
+        [ $scope.podsByService, $scope.services ],
+        [ $scope.monopodsByService, $scope.services ],
+        [ $scope.podsByDeployment, $scope.deployments ],
+        [ $scope.deploymentsByService, $scope.services ],
+        [ $scope.deploymentConfigsByService, $scope.services ],
+        [ $scope.routesByService, $scope.services ]
+      ].forEach(function(args) {
+        var map = args[0];
+        var lookup = args[1];
+        angular.forEach(map, function(resources, name) {
+          var source = lookup[name];
+          if (source) {
+            angular.forEach(resources, function(resource) {
+              topologyRelations.push({ source: source.metadata.selfLink, target: resource.metadata.selfLink });
+            });
+          }
+        });
+      });
+
+      $scope.topologyItems = topologyItems;
+      $scope.topologyRelations = topologyRelations;
+      $scope.$digest();
+    }
+
+    function updateTopologyLater() {
+      if (!updateTimeout)
+        updateTimeout = window.setTimeout(updateTopology, 100);
+    }
+
+    $scope.$on("select", function(ev, resource) {
+      $scope.$apply(function() {
+        $scope.topologySelection = resource;
+        if (resource)
+          ObjectDescriber.setObject(resource, resource.kind);
+        else
+          ObjectDescriber.clearObject();
+      });
+    }, true);
+
+    function selectionChanged(resource) {
+      $scope.topologySelection = resource;
+    }
+
+    ObjectDescriber.onResourceChanged(selectionChanged);
+
+    // When view changes to topology, clear source of ObjectDescriber object
+    // So that selection can remain for topology view
+    $scope.$watch("overviewMode", function(value) {
+      if (value === "topology")
+        ObjectDescriber.source = null;
+    });
+
     $scope.$on('$destroy', function(){
       DataService.unwatchAll(watches);
+      window.clearTimeout(updateTimeout);
+      ObjectDescriber.removeResourceChangedCallback(selectionChanged);
     });
   });

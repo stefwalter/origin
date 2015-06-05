@@ -92,4 +92,22 @@ angular.module('openshiftConsole')
       },
       templateUrl: 'views/directives/_custom-icon.html'
     }
+  })
+  .directive('bottomOfWindow', function() {
+    return {
+      restrict:'A',
+      link: function(scope, element, attrs) {
+        function resized() {
+          var height = window.innerHeight - element[0].getBoundingClientRect().top;
+          element.css('height', (height - 10) + "px");
+        }
+
+        window.addEventListener('resize', resized);
+        resized();
+
+        element.on("$destroy", function() {
+          window.removeEventListener('resize', resized);
+        });
+      }
+    };
   });
