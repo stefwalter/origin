@@ -780,6 +780,37 @@ angular.module('openshiftConsole')
     limitranges:               API_CFG.k8s
   };
 
+  var OBJECT_KIND_MAP = {
+    Build:                    "builds",
+    BuildConfig:              "buildconfigs",
+    DeploymentConfig:         "deploymentconfigs",
+    ImageStream:              "imagestreams",
+    ImageStreamImage:         "imagestreamsimages",
+    ImageStreamToken:         "imagestreamstokens",
+    ImageStreamTag:           "imagestreamstags",
+    OAuthAccessToken:         "oauthaccesstokens",
+    OAuthAuthorizeToken:      "oauthauthorizetokens",
+    OAuthClient:              "oauthclients",
+    OAuthClientAuthorization: "oauthclientauthorizations",
+    Policy:                   "policies",
+    PolicyBinding:            "policybindings",
+    ProcessedTemplate:        "processedtemplates",
+    Project:                  "projects",
+    ProjectRequest:           "projectrequest",
+    Role:                     "roles",
+    RoleBinding:              "rolebindings",
+    Route:                    "routes",
+    Template:                 "templates",
+    User:                     "users",
+
+    Event:                    "events",
+    Pod:                      "pods",
+    ReplicationController:    "replicationcontrollers",
+    Service:                  "services",
+    ResourceQuota:            "resourcequotas",
+    LimitRange:               "limitranges"
+  };
+
   DataService.prototype._urlForType = function(type, id, context, isWebsocket, params) {
 
     // Parse the type parameter for type itself and subresource. Example: 'buildconfigs/instantiate'
@@ -866,30 +897,6 @@ angular.module('openshiftConsole')
       }
     }
     return null;
-  };
-
-  var OBJECT_KIND_MAP = {
-    Build:                    "builds",
-    BuildConfig:              "buildconfigs",
-    DeploymentConfig:         "deploymentconfigs",
-    ImageStream:              "imagestreams",
-    OAuthAccessToken:         "oauthaccesstokens",
-    OAuthAuthorizeToken:      "oauthauthorizetokens",
-    OAuthClient:              "oauthclients",
-    OAuthClientAuthorization: "oauthclientauthorizations",
-    Policy:                   "policies",
-    PolicyBinding:            "policybindings",
-    Project:                  "projects",
-    Role:                     "roles",
-    RoleBinding:              "rolebindings",
-    Route:                    "routes",
-    User:                     "users",
-
-    Pod:                      "pods",
-    ReplicationController:    "replicationcontrollers",
-    Service:                  "services",
-    ResourceQuota:            "resourcequotas",
-    LimitRange:               "limitranges"
   };
 
   DataService.prototype._objectType = function(kind) {
